@@ -1,0 +1,1360 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                  String              @id @default(cuid())
+  auth0Id             String              @unique
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  stripeCustomerId    String?
+  subscriptionStatus  String              @default("free")
+  subscriptionTier    String              @default("free")
+  onboardingCompleted Boolean             @default(false)
+  organizationId      String
+  email               String
+  name                String
+  lastLoginAt         DateTime?
+  loginCount          Int                 @default(0)
+  mfaEnabled          Boolean             @default(false)
+  emailEncrypted      Json?
+  nameEncrypted       Json?
+  roleId              String
+  workspaceId         String?
+  Invite              Invite[]
+  agentStatus         AgentStatus[]
+  agents              Agent[]
+  analytics           Analytics[]
+  apiKeys             ApiKey[]
+  auditLogs           AuditLog[]
+  billing             Billing[]
+  conversations       Conversation[]
+  embedIdentities     EmbedUserIdentity[]
+  humanAgent          HumanAgent?
+  knowledgeGaps       KnowledgeGap[]
+  ownedLeads          Lead[]
+  refinedAnswers      RefinedAnswer[]
+  typingIndicators    TypingIndicator[]
+  userSessions        UserSession[]
+  organizationQuestionSets OrganizationQuestionSet[]
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userRole            Role                @relation(fields: [roleId], references: [id])
+  workspace           Workspace?          @relation(fields: [workspaceId], references: [id])
+
+  @@index([organizationId])
+  @@index([auth0Id])
+  @@index([email])
+  @@index([roleId])
+  @@index([workspaceId])
+  @@map("users")
+}
+
+model Agent {
+  id                   String                     @id @default(cuid())
+  name                 String
+  description          String?
+  systemPrompt         String
+  model                String                     @default("gemini-2.0-flash-exp")
+  temperature          Float                      @default(0.7)
+  isActive             Boolean                    @default(true)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  rateLimit            Int                        @default(1000)
+  currentUsage         Int                        @default(0)
+  userId               String
+  orgId                String
+  workspaceId          String
+  deployedAt           DateTime?
+  deployedUrl          String?
+  deploymentError      String?
+  deploymentStatus     String                     @default("NOT_DEPLOYED")
+  lastDeploymentCheck  DateTime?
+  leadMode             String                     @default("conversational")
+  supportedLanguages   String[]                   @default(["en"])
+  welcomeMessage       String?
+  currentDeploymentId  String?
+  deploymentConfig     Json?
+  deploymentVersion    Int                        @default(0)
+  developmentConfig    Json?
+  // Lead Collection Settings
+  leadCollectionQuestionSetId String?             @map("lead_collection_question_set_id")
+  leadCollectionTrigger       String?             @default("beginning") @map("lead_collection_trigger") // "beginning", "after_messages", "keywords", "no_answer"
+  leadCollectionDisplayMode   String?             @default("all_at_once") @map("lead_collection_display_mode") // "all_at_once", "one_by_one"
+  leadCollectionKeywords      String[]            @default([]) @map("lead_collection_keywords")
+  automaticAppointmentBooking Boolean             @default(false) @map("automatic_appointment_booking")
+  // Email Notification Settings
+  emailNotifications          Json?               @map("email_notifications")
+  // Engagement Settings
+  engagementConfig            Json?               @map("engagement_config")
+  zapierConfig         AgentZapierConfig?
+  knowledgeGapSettings AgentKnowledgeGapSettings?
+  agentStatus          AgentStatus[]
+  leadCollectionQuestionSet OrganizationQuestionSet? @relation("LeadCollectionQuestionSet", fields: [leadCollectionQuestionSetId], references: [id])
+  leadFlowSessions     LeadFlowSession[]
+  leadAnalytics        LeadAnalytics[]
+  appointments         LeadAppointment[]
+  standaloneAppointments Appointment[]
+  widgetSettings       AgentWidgetSettings?
+  organization         Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user                 User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace            Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  analytics            Analytics[]
+  conversations        Conversation[]
+  deployments          Deployment[]
+  chunks               DocumentChunk[]
+  handoverEvents       HandoverEvent[]            @relation("HandoverFromAgent")
+  knowledgeGaps        KnowledgeGap[]
+  leads                Lead[]
+  refinedAnswers       RefinedAnswer[]
+  sources              Source[]
+  typingIndicators     TypingIndicator[]
+  humanAgents          HumanAgent[]
+
+  @@index([userId, orgId])
+  @@index([orgId, isActive])
+  @@index([userId, isActive])
+  @@index([deploymentStatus])
+  @@index([currentDeploymentId])
+  @@index([orgId, workspaceId, isActive])
+  @@index([orgId, deploymentStatus])
+  @@map("agents")
+}
+
+model Conversation {
+  id                       String               @id @default(cuid())
+  title                    String?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  userId                   String
+  agentId                  String
+  orgId                    String
+  workspaceId              String
+  type                     String?              @default("chat")
+  status                   String               @default("active")
+  detectedLanguage         String?
+  anonymousUserId          String?
+  lastSessionAt            DateTime?
+  sessionCount             Int                  @default(1)
+  sessionId                String?
+  sessionMetadata          Json?
+  visitCount               Int                  @default(1)
+  sessionMetadataEncrypted Json?
+  conversationMetrics      ConversationMetric[]
+  agent                    Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  anonymousUser            AnonymousUser?       @relation(fields: [anonymousUserId], references: [id])
+  organization             Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userSession              UserSession?         @relation(fields: [sessionId], references: [id])
+  user                     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace                Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  handoverEvents           HandoverEvent[]
+  knowledgeGaps            KnowledgeGap[]
+  leadFlowSessions         LeadFlowSession[]
+  leads                    Lead[]
+  messages                 Message[]
+  typingIndicators         TypingIndicator[]
+
+  @@index([status])
+  @@index([anonymousUserId])
+  @@index([sessionId])
+  @@index([workspaceId, orgId])
+  @@index([agentId, orgId])
+  @@index([agentId, status])
+  @@index([orgId, status])
+  @@index([updatedAt])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+model Message {
+  id               String         @id @default(cuid())
+  content          String
+  role             String
+  createdAt        DateTime       @default(now())
+  citations        Json?
+  sources          String[]
+  conversationId   String
+  feedback         String?
+  language         String         @default("en")
+  metadata         Json?
+  ablyMessageId    String?
+  deliveryStatus   String         @default("sent")
+  realtimeSentAt   DateTime?
+  sessionId        String?
+  sessionSequence  Int?
+  contentEncrypted Json?
+  knowledgeGaps    KnowledgeGap[]
+  conversation     Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([ablyMessageId])
+  @@index([deliveryStatus])
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+  @@index([sessionId])
+  @@index([sessionId, sessionSequence])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model RefinedAnswer {
+  id                String                 @id @default(cuid())
+  originalMessageId String
+  refinedContent    String
+  embedding         Unsupported("vector")?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  userId            String
+  agentId           String
+  orgId             String
+  workspaceId       String
+  agent             Agent                  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organization      Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([originalMessageId])
+  @@index([workspaceId, orgId])
+  @@map("refined_answers")
+}
+
+model Source {
+  id                    String          @id @default(cuid())
+  name                  String
+  type                  String
+  content               String?
+  url                   String?
+  metadata              Json?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  agentId               String
+  orgId                 String
+  workspaceId           String
+  processingCompletedAt DateTime?
+  processingDetails     Json?
+  processingError       String?
+  processingProgress    Int             @default(0)
+  processingStartedAt   DateTime?
+  processingStatus      String          @default("pending")
+  chunks                DocumentChunk[]
+  agent                 Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organization          Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  workspace             Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([orgId])
+  @@index([agentId, createdAt])
+  @@index([processingStatus])
+  @@index([workspaceId, orgId])
+  @@map("sources")
+}
+
+model DocumentChunk {
+  id           String                 @id @default(cuid())
+  content      String
+  embedding    Unsupported("vector")?
+  metadata     Json?
+  chunkIndex   Int
+  sourceId     String
+  agentId      String
+  orgId        String
+  workspaceId  String
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  language     String                 @default("en")
+  agent        Agent                  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organization Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  source       Source                 @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  workspace    Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([agentId, createdAt])
+  @@index([sourceId, chunkIndex])
+  @@index([language])
+  @@index([workspaceId, orgId])
+  @@map("document_chunks")
+}
+
+model Analytics {
+  id       String   @id @default(cuid())
+  type     String
+  value    Float
+  date     DateTime
+  metadata Json?
+  userId   String?
+  agentId  String?
+  orgId    String?
+  agent    Agent?   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("analytics")
+}
+
+model Billing {
+  id              String   @id @default(cuid())
+  stripeInvoiceId String?
+  amount          Int
+  currency        String   @default("usd")
+  status          String
+  createdAt       DateTime @default(now())
+  userId          String
+  orgId           String?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("billing")
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model Role {
+  id              String           @id @default(uuid())
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  auth0RoleId     String           @unique
+  auth0RoleName   String
+  isSystemRole    Boolean          @default(false)
+  source          String           @default("auth0")
+  scope           String           @default("organization")
+  invites         Invite[]
+  rolePermissions RolePermission[]
+  users           User[]
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  userId            String
+  action            String
+  resource          String
+  metadata          Json?
+  timestamp         DateTime @default(now())
+  ipAddress         String?
+  userAgent         String?
+  dataAccessDetails Json?
+  encryptionStatus  String?
+  organizationId    String
+  resourceId        String?
+  resourceType      String
+  sessionId         String?
+  workspaceId       String?
+  complianceFlags   Json?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([timestamp])
+  @@index([action])
+  @@index([resourceType])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("audit_logs")
+}
+
+model Organization {
+  id                   String              @id @default(cuid())
+  name                 String
+  slug                 String              @unique
+  auth0Id              String              @unique
+  emailDomain          String?             @unique
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  onboardingCompleted  Boolean             @default(false)
+  address              String?
+  city                 String?
+  countryId            String?
+  logo                 String?
+  stateId              String?
+  defaultLlmModel      String              @default("gemini-2.0-flash-exp")
+  defaultLlmProvider   String              @default("openai")
+  llmConfig            Json?
+  accessHours          Json?
+  dataResidency        String?
+  domainAliases        String[]            @default([])
+  mfaRequired          Boolean             @default(false)
+  ssoConnectionId      String?
+  subdomainPatterns    String[]            @default([])
+  settings             Json?
+  // Organization Branding
+  branding             Json?               @map("branding")
+  stripeCustomerId     String?
+  razorpayCustomerId   String?
+  agentZapierConfigs   AgentZapierConfig[]
+  questionTemplates    QuestionTemplate[]
+  organizationQuestionSets OrganizationQuestionSet[]
+  leadAnalytics        LeadAnalytics[]
+  Invite               Invite[]
+  country              Country?            @relation(fields: [countryId], references: [id])
+  state                State?              @relation(fields: [stateId], references: [id])
+  workspaces           Workspace[]
+  agents               Agent[]
+  apiKeys              ApiKey[]
+  conversations        Conversation[]
+  chunks               DocumentChunk[]
+  knowledgeGaps        KnowledgeGap[]
+  knowledgeGapDefaults OrganizationKnowledgeGapDefaults?
+  leads                Lead[]
+  refinedAnswers       RefinedAnswer[]
+  sources              Source[]
+  users                User[]
+  // Billing Relations
+  subscriptions        Subscription[]
+  invoices             Invoice[]
+  usageTracking        UsageTracking[]
+  paymentMethods       PaymentMethod[]
+  billingEvents        BillingEvent[]
+}
+
+model State {
+  id            String         @id @default(cuid())
+  name          String
+  code          String         @unique
+  countryId     String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  organizations Organization[]
+  country       Country        @relation(fields: [countryId], references: [id], onDelete: Cascade)
+}
+
+model Country {
+  id            String         @id @default(cuid())
+  name          String
+  code          String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  organizations Organization[]
+  states        State[]
+}
+
+model Workspace {
+  id             String             @id @default(cuid())
+  name           String
+  slug           String             @unique
+  orgId          String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  isDefault      Boolean?           @default(false)
+  Invite         Invite[]
+  organization   Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  settings       WorkspaceSettings?
+  agents         Agent[]
+  conversations  Conversation[]
+  chunks         DocumentChunk[]
+  humanAgents    HumanAgent[]
+  knowledgeGaps  KnowledgeGap[]
+  leads          Lead[]
+  refinedAnswers RefinedAnswer[]
+  sources        Source[]
+  users          User[]
+}
+
+model WorkspaceSettings {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  name        String?
+  description String?
+  timezone    String?   @default("UTC")
+  language    String?   @default("en")
+  settings    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Invite {
+  id                String       @id @default(cuid())
+  email             String
+  status            String       @default("pending")
+  sentAt            DateTime     @default(now())
+  acceptedAt        DateTime?
+  auth0InvitationId String?
+  acceptedBy        String?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  expiresAt         DateTime
+  invitedBy         String
+  message           String?
+  organizationId    String
+  resentAt          DateTime?
+  resentBy          String?
+  roleId            String
+  workspaceId       String?
+  users             User         @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role              Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  Workspace         Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([status])
+  @@index([workspaceId])
+}
+
+model Lead {
+  id                String        @id @default(cuid())
+  name              String?
+  email             String
+  phone             String?
+  message           String?
+  programInterest   String?
+  agentId           String
+  orgId             String
+  workspaceId       String
+  conversationId    String?
+  clientIp          String?
+  userAgent         String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  intake            String?
+  program           String?
+  timing            String?
+  university        String?
+  channel           LeadChannel   @default(embed)
+  consent           Boolean       @default(false)
+  consentAt         DateTime?
+  initialMessage    String?
+  leadSource        String?
+  metadata          Json?
+  status            LeadStatus    @default(new)
+  utmCampaign       String?
+  utmMedium         String?
+  utmSource         String?
+  assignedAt        DateTime?
+  fullName          String?
+  intakeTerm        String?
+  intakeYear        Int?
+  lastActivityAt    DateTime?
+  locale            String?
+  notes             String?
+  ownerUserId       String?
+  programId         String?
+  programName       String?
+  tags              String[]      @default([])
+  universityId      String?
+  universityName    String?
+  emailEncrypted    Json?
+  fullNameEncrypted Json?
+  messageEncrypted  Json?
+  nameEncrypted     Json?
+  phoneEncrypted    Json?
+  agent             Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversation      Conversation? @relation(fields: [conversationId], references: [id])
+  organization      Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner             User?         @relation(fields: [ownerUserId], references: [id])
+  workspace         Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fileUploads       LeadFileUpload[]
+  appointments      LeadAppointment[]
+  standaloneAppointments Appointment[]
+  consents          LeadConsent[]
+  analytics         LeadAnalytics[]
+
+  @@index([agentId, createdAt(sort: Desc)])
+  @@index([email, agentId])
+  @@index([status])
+  @@index([channel])
+  @@index([ownerUserId])
+  @@index([lastActivityAt(sort: Desc)])
+  @@index([tags], type: Gin)
+  @@index([workspaceId, orgId])
+  @@map("leads")
+}
+
+
+
+model AgentWidgetSettings {
+  id              String   @id @default(cuid())
+  agentId         String   @unique
+  position        String   @default("bottom-right")
+  theme           String   @default("light")
+  primaryColor    String?
+  secondaryColor  String?
+  backgroundColor String?
+  textColor       String?
+  borderRadius    Int      @default(12)
+  showBranding    Boolean  @default(true)
+  customLogo      String?
+  customTitle     String?
+  fontSize        String   @default("medium")
+  animationSpeed  String   @default("normal")
+  autoOpen        Boolean  @default(false)
+  showOnScroll    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("agent_widget_settings")
+}
+
+model Deployment {
+  id             String    @id @default(cuid())
+  agentId        String
+  version        Int
+  status         String    @default("DRAFT")
+  configSnapshot Json
+  deployedAt     DateTime?
+  deployedUrl    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  agent          Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, version])
+  @@index([agentId, status])
+  @@index([status])
+  @@map("deployments")
+}
+
+model AnonymousUser {
+  id                   String            @id @default(cuid())
+  fingerprintHash      String            @unique
+  deviceFingerprintId  String
+  ipAddress            String?
+  userAgent            String?
+  geolocation          Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  lastSeenAt           DateTime          @default(now())
+  geolocationEncrypted Json?
+  ipAddressEncrypted   Json?
+  deviceFingerprint    DeviceFingerprint @relation(fields: [deviceFingerprintId], references: [id])
+  conversations        Conversation[]
+  userSessions         UserSession[]
+
+  @@index([fingerprintHash])
+  @@index([ipAddress])
+  @@index([lastSeenAt])
+  @@map("anonymous_users")
+}
+
+model DeviceFingerprint {
+  id                  String          @id @default(cuid())
+  canvasHash          String?
+  fontList            String[]
+  pluginList          String[]
+  screenResolution    String?
+  timezone            String?
+  language            String?
+  colorDepth          Int?
+  pixelRatio          Float?
+  hardwareConcurrency Int?
+  touchSupport        Boolean?
+  cookieEnabled       Boolean?
+  doNotTrack          Boolean?
+  hash                String          @unique
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  canvasHashEncrypted Json?
+  fontListEncrypted   Json?
+  pluginListEncrypted Json?
+  anonymousUsers      AnonymousUser[]
+
+  @@index([hash])
+  @@map("device_fingerprints")
+}
+
+model UserSession {
+  id                String         @id @default(cuid())
+  sessionToken      String         @unique
+  anonymousUserId   String?
+  userId            String?
+  agentId           String
+  orgId             String
+  ipAddress         String?
+  userAgent         String?
+  startedAt         DateTime       @default(now())
+  lastActivityAt    DateTime       @default(now())
+  expiresAt         DateTime
+  isActive          Boolean        @default(true)
+  metadata          Json?
+  metadataEncrypted Json?
+  conversations     Conversation[]
+  anonymousUser     AnonymousUser? @relation(fields: [anonymousUserId], references: [id])
+  user              User?          @relation(fields: [userId], references: [id])
+
+  @@index([sessionToken])
+  @@index([anonymousUserId])
+  @@index([userId])
+  @@index([agentId])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@map("user_sessions")
+}
+
+model EmbedUserIdentity {
+  id                     String   @id @default(cuid())
+  userId                 String
+  identityType           String
+  identityValue          String
+  metadata               Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  identityValueEncrypted Json?
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([identityType])
+  @@index([identityValue])
+  @@map("embed_user_identities")
+}
+
+model TypingIndicator {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  agentId        String
+  isTyping       Boolean      @default(true)
+  startedAt      DateTime     @default(now())
+  expiresAt      DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  agent          Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([expiresAt])
+  @@map("typing_indicators")
+}
+
+model HandoverEvent {
+  id             String       @id @default(cuid())
+  conversationId String
+  fromAgentId    String
+  toAgentId      String
+  reason         String
+  priority       String       @default("medium")
+  status         String       @default("pending")
+  userMessage    String?
+  createdAt      DateTime     @default(now())
+  acceptedAt     DateTime?
+  completedAt    DateTime?
+  metadata       Json?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  fromAgent      Agent        @relation("HandoverFromAgent", fields: [fromAgentId], references: [id], onDelete: Cascade)
+  toAgent        HumanAgent   @relation("HandoverToAgent", fields: [toAgentId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([status])
+  @@index([priority])
+  @@map("handover_events")
+}
+
+model AgentStatus {
+  id           String      @id @default(cuid())
+  agentId      String
+  userId       String
+  humanAgentId String?
+  status       String      @default("online")
+  lastSeenAt   DateTime    @default(now())
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  agent        Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  humanAgent   HumanAgent? @relation(fields: [humanAgentId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, userId])
+  @@index([agentId])
+  @@index([userId])
+  @@index([humanAgentId])
+  @@map("agent_status")
+}
+
+model HumanAgent {
+  id                       String               @id @default(cuid())
+  userId                   String               @unique // Required and unique - one human agent profile per user
+  workspaceId              String?
+  agentId                  String?              // null = org level, not null = agent level
+  status                   String               @default("active")
+  availability             String               @default("available")
+  maxConcurrentChats       Int                  @default(3)
+  currentChats             Int                  @default(0)
+  workingHoursStart        String?
+  workingHoursEnd          String?
+  timezone                 String               @default("UTC")
+  allowOutsideWorkingHours Boolean              @default(false)
+  workingDays              Int[]                @default([1, 2, 3, 4, 5]) // Monday to Friday
+  slotDuration             Int                  @default(30) // in minutes
+  bufferTime               Int                  @default(15) // in minutes
+  maxAdvanceBooking        Int                  @default(30) // in days
+  minAdvanceBooking        Int                  @default(2)  // in hours
+  performanceRating        Float?
+  totalConversations       Int                  @default(0)
+  totalHandovers           Int                  @default(0)
+  averageResponseTime      Int?
+  lastActiveAt             DateTime?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  agentStatus              AgentStatus[]
+  conversationMetrics      ConversationMetric[]
+  handoverEvents           HandoverEvent[]      @relation("HandoverToAgent")
+  appointments             LeadAppointment[]
+  standaloneAppointments   Appointment[]
+  user                     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace                Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent                    Agent?               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([agentId])
+  @@index([status])
+  @@index([availability])
+  @@map("human_agents")
+}
+
+model ConversationMetric {
+  id               String       @id @default(cuid())
+  humanAgentId     String
+  conversationId   String
+  startTime        DateTime
+  endTime          DateTime?
+  duration         Int?
+  messageCount     Int          @default(0)
+  responseTime     Int?
+  userSatisfaction Int?
+  handoverReason   String?
+  createdAt        DateTime     @default(now())
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  humanAgent       HumanAgent   @relation(fields: [humanAgentId], references: [id], onDelete: Cascade)
+
+  @@index([humanAgentId])
+  @@index([conversationId])
+  @@index([startTime])
+  @@map("conversation_metrics")
+}
+
+model RetentionPolicy {
+  id             String    @id @default(cuid())
+  tableName      String
+  fieldName      String
+  retentionDays  Int
+  action         String
+  enabled        Boolean   @default(true)
+  lastExecuted   DateTime?
+  nextExecution  DateTime?
+  organizationId String
+  workspaceId    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([tableName, fieldName, organizationId])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([enabled])
+  @@index([nextExecution])
+  @@map("retention_policies")
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  key            String       @unique
+  type           String
+  organizationId String
+  userId         String
+  isActive       Boolean      @default(true)
+  expiresAt      DateTime
+  permissions    String[]     @default([])
+  lastUsedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([type])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("api_keys")
+}
+
+model KnowledgeGap {
+  id              String       @id @default(cuid())
+  agentId         String
+  conversationId  String
+  messageId       String
+  gapType         String
+  confidence      Float
+  status          String       @default("open")
+  userQuery       String
+  agentResponse   String
+  gapDetails      Json?
+  detectedAt      DateTime     @default(now())
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  orgId           String
+  workspaceId     String
+  userId          String
+  // Support for multiple instances of similar questions
+  instances       Json?        @default("[]") // Array of {userQuery, agentResponse, conversationId, messageId, detectedAt}
+  instanceCount   Int          @default(1)
+  agent           Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message         Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([gapType])
+  @@index([status])
+  @@index([confidence])
+  @@index([detectedAt])
+  @@index([workspaceId, orgId])
+  @@map("knowledge_gaps")
+}
+
+model AgentKnowledgeGapSettings {
+  id                         String   @id @default(cuid())
+  agentId                    String   @unique
+  isEnabled                  Boolean  @default(true)
+  contentGapThreshold        Float    @default(0.6)
+  complexityGapThreshold     Float    @default(0.5)
+  temporalGapThreshold       Float    @default(0.5)
+  contextualGapThreshold     Float    @default(0.4)
+  customGenericPhrases       String[] @default([])
+  customUncertaintyPhrases   String[] @default([])
+  conversationHistoryDays    Int      @default(30)
+  similarityThreshold        Float    @default(0.7)
+  maxRecentConversations     Int      @default(50)
+  maxMessagesPerConversation Int      @default(100)
+  detectionStrategy          String   @default("standard")
+  enableABTesting            Boolean  @default(false)
+  abTestVariant              String?
+  enableContentGaps          Boolean  @default(true)
+  enableComplexityGaps       Boolean  @default(true)
+  enableTemporalGaps         Boolean  @default(true)
+  enableContextualGaps       Boolean  @default(true)
+  enableNotifications        Boolean  @default(true)
+  notificationThreshold      Float    @default(0.8)
+  notificationFrequency      String   @default("daily")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  agent                      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("agent_knowledge_gap_settings")
+}
+
+model OrganizationKnowledgeGapDefaults {
+  id                         String       @id @default(cuid())
+  organizationId             String       @unique
+  contentGapThreshold        Float        @default(0.6)
+  analysisTemperature        Float        @default(0.1)
+  maxAnalysisTokens          Int          @default(2000)
+  conversationHistoryDays    Int          @default(30)
+  maxRecentConversations     Int          @default(50)
+  maxMessagesPerConversation Int          @default(100)
+  enableContentGaps          Boolean      @default(true)
+  enableComplexityGaps       Boolean      @default(true)
+  enableTemporalGaps         Boolean      @default(true)
+  enableContextualGaps       Boolean      @default(true)
+  enableCapabilityGaps       Boolean      @default(true)
+  enableNotifications        Boolean      @default(true)
+  notificationThreshold      Float        @default(0.8)
+  notificationFrequency      String       @default("daily")
+  enableDetailedAnalysis     Boolean      @default(true)
+  enableContextualAnalysis   Boolean      @default(true)
+  enableAdaptiveLearning     Boolean      @default(false)
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_knowledge_gap_defaults")
+}
+
+model AgentZapierConfig {
+  id             String       @id @default(cuid())
+  agentId        String       @unique
+  organizationId String
+  isEnabled      Boolean      @default(false)
+  lastTested     DateTime?
+  testStatus     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  agent          Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([organizationId])
+}
+
+enum LeadStatus {
+  new
+  contacted
+  in_progress
+  qualified
+  submitted
+  appointment_scheduled
+  closed_won
+  closed_lost
+}
+
+enum LeadChannel {
+  embed
+  playground
+  api
+}
+
+// Advanced Lead Collection System Models
+
+
+
+model QuestionTemplate {
+  id              String   @id @default(cuid())
+  orgId           String?  @map("org_id") // Optional - null for system templates, required for user templates
+  name            String
+  questionText    String   @map("question_text")
+  questionType    String   @map("question_type") // 'text', 'select', 'multiselect', 'file', 'date', 'number', 'email', 'phone'
+  options         Json?
+  validationRules Json?    @map("validation_rules")
+  isRequired      Boolean  @default(false) @map("is_required")
+  displayOrder    Int?     @map("display_order")
+  isActive        Boolean  @default(true) @map("is_active")
+  description     String?  // Optional description for admin use
+  fieldMapping    String?  @map("field_mapping") // Maps to lead field: name, email, phone, intakeTerm, programInterest, university, custom
+  templateType    String   @default("user") @map("template_type") // 'system' or 'user'
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization    Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organizationQuestionSetItems OrganizationQuestionSetItem[]
+
+  @@map("question_templates")
+}
+
+model OrganizationQuestionSet {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdBy   String?  @map("created_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator      User?        @relation(fields: [createdBy], references: [id])
+  items        OrganizationQuestionSetItem[]
+  leadCollectionAgents Agent[] @relation("LeadCollectionQuestionSet")
+  leadFlowSessions LeadFlowSession[]
+
+  @@unique([orgId, name])
+  @@map("organization_question_sets")
+}
+
+model OrganizationQuestionSetItem {
+  id                String   @id @default(cuid())
+  questionSetId     String   @map("question_set_id")
+  questionTemplateId String? @map("question_template_id")
+  customQuestionText String? @map("custom_question_text")
+  questionType      String   @map("question_type") // 'text', 'select', 'multiselect', 'file', 'date', 'number', 'email', 'phone'
+  options           Json?
+  validationRules   Json?    @map("validation_rules")
+  isRequired        Boolean  @default(false) @map("is_required")
+  displayOrder      Int      @map("display_order")
+  conditionalLogic  Json?    @map("conditional_logic")
+  fieldMapping      String?  @map("field_mapping") // Maps to lead field: name, email, phone, intakeTerm, programInterest, university, custom
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  questionSet       OrganizationQuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  questionTemplate  QuestionTemplate? @relation(fields: [questionTemplateId], references: [id])
+
+  @@map("organization_question_set_items")
+}
+
+
+model LeadFlowSession {
+  id              String   @id @default(cuid())
+  conversationId  String   @map("conversation_id")
+  agentId         String   @map("agent_id")
+  questionSetId   String?  @map("question_set_id")
+  currentQuestionId String? @map("current_question_id")
+  collectedData   Json     @default("{}") @map("collected_data")
+  sessionMetadata Json     @default("{}") @map("session_metadata")
+  languageCode    String   @default("en") @map("language_code")
+  isCompleted     Boolean  @default(false) @map("is_completed")
+  startedAt       DateTime @default(now()) @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent           Agent        @relation(fields: [agentId], references: [id])
+  questionSet     OrganizationQuestionSet? @relation(fields: [questionSetId], references: [id])
+
+  @@map("lead_flow_sessions")
+}
+
+model LeadAnalytics {
+  id                    String   @id @default(cuid())
+  orgId                 String   @map("org_id")
+  agentId               String?  @map("agent_id")
+  leadId                String?  @map("lead_id")
+  eventType             String   @map("event_type")
+  eventData             Json?    @map("event_data")
+  sessionDuration       Int?     @map("session_duration")
+  questionResponseTime  Int?     @map("question_response_time")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  organization          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent                 Agent?       @relation(fields: [agentId], references: [id])
+  lead                  Lead?        @relation(fields: [leadId], references: [id])
+
+  @@map("lead_analytics")
+}
+
+model LeadFileUpload {
+  id         String   @id @default(cuid())
+  leadId     String   @map("lead_id")
+  questionId String?  @map("question_id")
+  fileName   String   @map("file_name")
+  filePath   String   @map("file_path")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_file_uploads")
+}
+
+model LeadAppointment {
+  id               String   @id @default(cuid())
+  leadId           String   @map("lead_id")
+  agentId          String?  @map("agent_id")
+  humanAgentId     String   @map("human_agent_id")
+  appointmentDate  DateTime @map("appointment_date")
+  durationMinutes  Int      @default(30) @map("duration_minutes")
+  meetingType      String   @default("video") @map("meeting_type")
+  meetingLink      String?  @map("meeting_link")
+  status           String   @default("scheduled")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  lead             Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent            Agent?      @relation(fields: [agentId], references: [id])
+  humanAgent       HumanAgent  @relation(fields: [humanAgentId], references: [id])
+
+  @@map("lead_appointments")
+}
+
+model Appointment {
+  id               String    @id @default(cuid())
+  agentId          String?   @map("agent_id") // Optional - for tracking which AI agent created it
+  humanAgentId     String    @map("human_agent_id")
+  leadId           String?   @map("lead_id") // Optional - for appointments created from leads
+  endUserName      String    @map("end_user_name")
+  endUserEmail     String    @map("end_user_email")
+  endUserPhone     String?   @map("end_user_phone")
+  appointmentDate  DateTime  @map("appointment_date")
+  durationMinutes  Int       @default(30) @map("duration_minutes")
+  meetingType      String    @default("video") @map("meeting_type")
+  meetingLink      String?   @map("meeting_link")
+  status           String    @default("scheduled")
+  notes            String?
+  reminderSentAt   DateTime? @map("reminder_sent_at")
+  cancelledAt      DateTime? @map("cancelled_at")
+  cancellationReason String? @map("cancellation_reason")
+  rescheduledAt    DateTime? @map("rescheduled_at")
+  rescheduleReason String?   @map("reschedule_reason")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  agent            Agent?      @relation(fields: [agentId], references: [id])
+  humanAgent       HumanAgent  @relation(fields: [humanAgentId], references: [id])
+  lead             Lead?       @relation(fields: [leadId], references: [id])
+
+  @@index([humanAgentId])
+  @@index([appointmentDate])
+  @@index([status])
+  @@index([reminderSentAt])
+  @@map("appointments")
+}
+
+model LeadConsent {
+  id           String   @id @default(cuid())
+  leadId       String   @map("lead_id")
+  consentType  String   @map("consent_type")
+  granted      Boolean
+  consentText  String   @map("consent_text")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  grantedAt    DateTime @default(now()) @map("granted_at")
+
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_consents")
+}
+
+// Billing System Models
+
+model SubscriptionPlan {
+  id                    String   @id @default(cuid())
+  name                  String
+  description           String?
+  planType              String   // "study_abroad_agent" or "university"
+  tier                  String   // "starter", "professional", "enterprise"
+  price                 Int      // Price in cents
+  currency              String   @default("USD")
+  billingInterval       String   @default("monthly") // "monthly", "yearly"
+  isActive              Boolean  @default(true)
+  features              Json     // Plan features and limits
+  modelAccess           Json     // Available models for this plan
+  usageLimits           Json     // Usage limits (interactions, documents, etc.)
+  stripePriceId         String?  // Stripe price ID for this plan
+  razorpayPlanId        String?  // Razorpay plan ID for this plan
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  subscriptions         Subscription[]
+  usageTracking         UsageTracking[]
+
+  @@unique([planType, tier, billingInterval])
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  planId                String
+  status                String   @default("active") // "active", "cancelled", "past_due", "unpaid"
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean  @default(false)
+  cancelledAt           DateTime?
+  trialStart            DateTime?
+  trialEnd              DateTime?
+  stripeSubscriptionId  String?
+  razorpaySubscriptionId String?
+  paymentMethodId       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                  SubscriptionPlan @relation(fields: [planId], references: [id])
+  invoices              Invoice[]
+  usageTracking         UsageTracking[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                    String   @id @default(cuid())
+  subscriptionId        String
+  organizationId        String
+  amount                Int      // Amount in cents
+  currency              String   @default("USD")
+  status                String   @default("draft") // "draft", "open", "paid", "void", "uncollectible"
+  invoiceNumber         String   @unique
+  dueDate               DateTime?
+  paidAt                DateTime?
+  stripeInvoiceId       String?
+  razorpayInvoiceId     String?
+  paymentMethodId       String?
+  lineItems             Json     // Invoice line items
+  metadata              Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model UsageTracking {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  subscriptionId        String
+  planId                String
+  metricType            String   // "interactions", "documents", "websites", "leads", "appointments", "knowledge_gaps"
+  currentUsage          Int      @default(0)
+  usageLimit            Int
+  periodStart           DateTime
+  periodEnd             DateTime
+  lastUpdated           DateTime @default(now())
+  metadata              Json?
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  plan                  SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@unique([organizationId, subscriptionId, planId, metricType, periodStart])
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([metricType])
+  @@index([periodStart])
+  @@map("usage_tracking")
+}
+
+model PaymentMethod {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  type                  String   // "card", "bank_account", "wallet"
+  provider              String   // "stripe", "razorpay"
+  providerPaymentMethodId String
+  isDefault             Boolean  @default(false)
+  last4                 String?
+  brand                 String?
+  expiryMonth           Int?
+  expiryYear            Int?
+  holderName            String?
+  metadata              Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([provider])
+  @@map("payment_methods")
+}
+
+model BillingEvent {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  eventType             String   // "subscription_created", "subscription_updated", "payment_succeeded", "payment_failed", etc.
+  eventData             Json
+  provider              String?  // "stripe", "razorpay"
+  providerEventId       String?
+  processed             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([eventType])
+  @@index([processed])
+  @@map("billing_events")
+}
